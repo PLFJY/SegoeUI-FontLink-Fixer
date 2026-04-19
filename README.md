@@ -1,82 +1,92 @@
 # SegoeUI-FontLink-Fixer
 
-`SegoeUI-FontLink-Fixer` is a conservative PowerShell tool for inspecting, backing up, previewing, applying, verifying, and restoring Windows FontLink mappings for the `Segoe UI` family.
+简体中文 / [日本語](README.ja-JP.md) / [한국어](README.ko-KR.md) / [English](README.en-US.md)
 
-It targets:
+> [!WARNING]
+> 本项目的相当一部分代码由 AI 辅助生成，并经过持续的人工作业、联调和重构，但它仍然可能存在遗漏、边界情况处理不足或行为与预期不完全一致的问题。
+> 如果你在使用过程中发现 Bug、兼容性问题、异常行为或文档缺失，欢迎积极提交 Issue。最好附上复现步骤、日志、截图和系统版本信息，这会非常有帮助。
+
+`SegoeUI-FontLink-Fixer` 是一个偏保守、以安全为先的 PowerShell 工具，用于检查、备份、预览、应用、校验和恢复 Windows FontLink 注册表映射。
+
+目标注册表路径：
 
 `HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\FontLink\SystemLink`
 
-The main use case is correcting CJK fallback priority for `Segoe UI*` values on systems where the default order is not a good fit for the user's preferred Chinese, Japanese, or Korean fallback behavior.
+它的主要用途是在默认 CJK 回退顺序不符合用户预期时，调整 `Segoe UI*`、`Tahoma`、`Microsoft Sans Serif` 在非中日韩系统上的字体回退优先级。
 
-The tool does **not** rebuild FontLink lists from scratch. It uses a stable reordering strategy:
+## 这是什么
 
-- move matching target-language fonts earlier
-- preserve unrelated entries in their original order
-- avoid inventing entries that do not already exist on the machine
+这个工具不会从零重建 FontLink 列表，而是采用稳定重排策略：
 
-## Safety Warning
+- 仅把目标语言对应的字体前移
+- 保留无关条目的相对顺序
+- 不凭空生成当前值里不存在的条目
 
-This project edits `HKLM` registry data. That is sensitive system configuration.
+这意味着它更适合做“顺序修正”，而不是做激进重写。
 
-Please read the script and understand the risks before using `apply` or `restore`.
+## 安全警告
 
-Important safety behavior:
+本项目会修改 `HKLM` 下的系统注册表数据，这属于敏感配置。
 
-- no registry write happens before backup succeeds
-- every write path validates inputs before proceeding
-- `apply` verifies the registry after writing and does not report success if verification fails
-- `restore` validates the selected backup, creates a fresh pre-restore safety backup, restores the snapshot, and verifies the final registry state
-- incomplete backup directories are marked and rejected
+在使用 `apply` 或 `restore` 之前，请先阅读脚本并确认你理解风险和恢复路径。
 
-This reduces risk, but does not remove it. Use it only if you are comfortable recovering registry settings.
+当前实现中的关键安全行为：
 
-## Features
+- 在任何写入前，必须先完成备份
+- 备份失败后不会继续执行写入
+- `apply` 写入后会重新读取并校验，不通过就不会报告成功
+- `restore` 会先校验备份，再额外创建一份恢复前安全备份，随后执行恢复并再次校验
+- 不完整备份会被明确标记，并且不能用于恢复
 
-- backs up the entire `SystemLink` key, not just selected `Segoe UI*` values
-- exports both a `.reg` file and a structured JSON snapshot
-- writes a manifest with hashes and inventory data for validation
-- processes every registry value whose name starts with `Segoe UI`
-- also manages `Tahoma` and `Microsoft Sans Serif` conservatively
-- supports `zh-CN`, `zh-TW`, `ja-JP`, and `ko-KR` language profiles
-- supports dry-run preview mode
-- supports restoring the latest valid backup or a specific backup path
-- includes a keyboard-driven TUI for local use
-- supports interface languages:
-  `en-US`, `zh-CN`, `zh-TW`, `ja-JP`, `ko-KR`
+这些设计可以降低风险，但不能消除风险。
 
-## Requirements
+## 功能
+
+- 备份整个 `SystemLink` 键，而不是只备份 `Segoe UI*`
+- 同时导出 `.reg` 文件和结构化 JSON 快照
+- 写入包含哈希、时间戳、值清单的 `manifest.json`
+- 自动处理所有以 `Segoe UI` 开头的注册表值
+- 同时处理 `Tahoma` 和 `Microsoft Sans Serif`
+- 支持 `zh-CN`、`zh-TW`、`ja-JP`、`ko-KR` 四种配置
+- 支持 dry-run / 预览模式
+- 支持恢复最近一个有效备份或指定路径备份
+- 提供本地键盘驱动的 TUI
+- 支持界面语言：
+  `zh-CN`、`ja-JP`、`ko-KR`、`en-US`
+
+## 环境要求
 
 - Windows
-- PowerShell 5.1 or later
-- administrator rights for `apply` and `restore`
+- PowerShell 5.1 或更高版本
+- `apply` / `restore` 需要管理员权限
 
-## Quick Start
+## 快速开始
 
-Launch the TUI:
+启动 TUI：
 
 ```powershell
 .\SegoeLinker.ps1
 ```
 
-Or explicitly:
+也可以显式写成：
 
 ```powershell
 .\SegoeLinker.ps1 tui
 ```
 
-Run a dry-run preview:
+预览简体中文配置将如何调整顺序：
 
 ```powershell
 .\SegoeLinker.ps1 apply zh-CN --dry-run
 ```
 
-Create a manual backup:
+手动创建备份：
 
 ```powershell
 .\SegoeLinker.ps1 backup
 ```
 
-Restore the latest valid backup:
+恢复最近一个有效备份：
 
 ```powershell
 .\SegoeLinker.ps1 restore --latest
@@ -84,45 +94,44 @@ Restore the latest valid backup:
 
 ## TUI
 
-Running `.\SegoeLinker.ps1` opens the local TUI.
+执行 `.\SegoeLinker.ps1` 会进入本地 TUI。
 
-The TUI is designed as the primary human-facing interface:
+TUI 设计目标是作为最终用户入口：
 
-- main menu choices react to a single key press
-- profile selection reacts to a single key press
-- language selection reacts to a single key press
-- free-text prompts are only used when input is inherently textual, such as a restore path
+- 主菜单为单键操作
+- 配置选择为单键操作
+- 语言选择为单键操作
+- 只有确实需要文本输入时才使用输入框，例如恢复指定备份路径
 
-The TUI stores the selected interface language in a local settings file:
+TUI 会把界面语言写入本地设置文件：
 
 - `.segoelinker.user.json`
 
-That file is kept in the project directory and ignored by Git.
+该文件保存在项目目录下，并已加入 Git 忽略。
 
-## Interface Languages
+## 界面语言
 
-You can switch UI language inside the TUI, or use `--lang` from the command line.
+可以在 TUI 内切换语言，也可以通过命令行使用 `--lang`。
 
-If no `--lang` is provided, the tool uses the locally saved language preference from `.segoelinker.user.json` when available.
+如果命令行没有显式传入 `--lang`，工具会优先使用本地缓存的界面语言设置。
 
-Examples:
+示例：
 
 ```powershell
 .\SegoeLinker.ps1 list --lang zh-CN
 .\SegoeLinker.ps1 status --lang ja-JP
 .\SegoeLinker.ps1 backup --lang ko-KR
-.\SegoeLinker.ps1 tui --lang zh-TW
+.\SegoeLinker.ps1 tui --lang en-US
 ```
 
-Supported language IDs:
+支持的语言 ID：
 
-- `en-US`
 - `zh-CN`
-- `zh-TW`
 - `ja-JP`
 - `ko-KR`
+- `en-US`
 
-## Commands
+## 命令
 
 ```powershell
 .\SegoeLinker.ps1
@@ -137,68 +146,68 @@ Supported language IDs:
 .\SegoeLinker.ps1 help
 ```
 
-## Supported Profiles
+## 支持的配置
 
-- `zh-CN`: prioritize `Microsoft YaHei UI`, `Microsoft YaHei`
-- `zh-TW`: prioritize `Microsoft JhengHei UI`, `Microsoft JhengHei`
-- `ja-JP`: prioritize `Yu Gothic UI`, `Yu Gothic`, `Meiryo UI`, `Meiryo`
-- `ko-KR`: prioritize `Malgun Gothic`
+- `zh-CN`：优先 `Microsoft YaHei UI`、`Microsoft YaHei`
+- `zh-TW`：优先 `Microsoft JhengHei UI`、`Microsoft JhengHei`
+- `ja-JP`：优先 `Yu Gothic UI`、`Yu Gothic`、`Meiryo UI`、`Meiryo`
+- `ko-KR`：优先 `Malgun Gothic`
 
-Profile behavior is intentionally conservative:
+配置行为刻意保持保守：
 
-- only existing matching entries are moved
-- unrelated entries keep their relative order
-- missing fonts are not added automatically
+- 只移动当前值中已经存在的目标项
+- 无关项保持原有相对顺序
+- 不自动补不存在的字体条目
 
-Additional legacy UI behavior:
+额外说明：
 
-- `Segoe UI*`, `Tahoma`, and `Microsoft Sans Serif` are all handled with the same stable reordering model
-- only entries already present in a value are moved
-- no `,128,96` legacy entries are synthesized for values that do not already contain them
+- `Segoe UI*`、`Tahoma`、`Microsoft Sans Serif` 都使用同一套稳定重排模型
+- 只有当前值里已存在的项目会被前移
+- 不会为不含 `,128,96` 条目的值凭空生成 `,128,96` 项
 
-## Backup Format
+## 备份格式
 
-Each backup is stored in a timestamped directory under [backups](./backups).
+每次备份都会在 [backups](./backups) 下创建一个带时间戳的目录。
 
-A completed backup contains:
+一个完整备份包含：
 
 - `SystemLink.reg`
-  full `reg.exe export` output for compatibility with manual inspection
+  用于兼容人工检查和手工导入的完整 `reg.exe export`
 - `SystemLink.snapshot.json`
-  structured snapshot of the full target key for exact restore logic
+  用于精确恢复逻辑的结构化完整快照
 - `manifest.json`
-  schema version, timestamps, file hashes, registry path, and value inventory
+  包含 schema 版本、时间戳、文件哈希、注册表路径和值清单
 
-The tool marks in-progress backups with `backup.incomplete.txt`. If backup creation fails at any point, that directory remains unusable for restore by design.
+工具会在备份进行中写入 `backup.incomplete.txt`。如果备份中途失败，该目录会被保留为不可恢复状态，这是有意的安全设计。
 
-## Restore Model
+## 恢复模型
 
-`restore` is designed to be explicit and defensive.
+`restore` 的设计目标是明确、保守、可验证。
 
-The flow is:
+执行流程：
 
-1. resolve the requested backup with `--latest` or `--file`
-2. validate the manifest, required files, schema version, registry target, and hashes
-3. create a new safety backup of the current registry state
-4. restore the full `SystemLink` snapshot exactly
-5. verify that the post-restore registry state matches the snapshot
+1. 通过 `--latest` 或 `--file` 解析目标备份
+2. 校验 manifest、必要文件、schema 版本、目标注册表路径和文件哈希
+3. 为当前系统状态再创建一份安全备份
+4. 精确恢复整个 `SystemLink` 快照
+5. 再次读取注册表并校验是否与快照一致
 
-The restore is exact at the `SystemLink` key level:
+恢复是以整个 `SystemLink` 键为单位的精确恢复：
 
-- values present in the backup are restored
-- values currently present but absent from the backup snapshot are removed
+- 备份中存在的值会被恢复
+- 当前存在但备份中不存在的值会被删除
 
-That exactness is intentional, because partial merge restore logic is riskier for this use case.
+这是有意选择，因为“部分合并恢复”在这个场景里更容易引入不确定性。
 
-## Elevation
+## 提权
 
-`apply` and `restore` require administrator rights because they write to `HKLM`.
+`apply` 和 `restore` 因为要写入 `HKLM`，所以必须以管理员权限运行。
 
-The script checks elevation before write operations. If needed, it relaunches itself with elevation before any registry modification begins.
+脚本会在写入前检查提权状态；如果当前会话不是管理员，它会先以管理员权限重新拉起自己，再进入真正的写入流程。
 
-The elevation path was designed specifically to avoid fragile manual command-line string concatenation. Arguments are passed through an encoded bootstrap payload so paths with spaces and complex arguments are preserved more safely.
+提权参数传递使用了编码载荷，而不是脆弱的命令行字符串拼接，因此对空格路径、引号、Unicode 参数都更安全。
 
-Commands that do not require forced elevation:
+这些命令默认不强制提权：
 
 - `backup`
 - `list`
@@ -206,53 +215,53 @@ Commands that do not require forced elevation:
 - `apply --dry-run`
 - `tui`
 
-Inside the TUI, write actions still route through the same safe command path.
+TUI 里的写操作同样会走这条安全的命令路径。
 
-## Output and Verification
+## 输出与校验
 
-The tool prints:
+工具会明确输出：
 
-- elevation state
-- backup location
-- matching managed values
-- preview before/after order
-- which backup is selected for restore
-- verification success or failure
-- a reminder that logoff or reboot may be required
+- 当前提权状态
+- 备份位置
+- 匹配到的受管理注册表值
+- 预览前后顺序差异
+- 恢复时选中的备份
+- 校验成功或失败结果
+- 可能需要注销/重启的提醒
 
-The tool does **not** claim success after `apply` or `restore` unless verification passes.
+如果 `apply` 或 `restore` 的最终校验没有通过，工具不会声称成功。
 
-## Failure Cases That Stop Execution
+## 会中止执行的典型情况
 
-The tool stops instead of continuing when it sees conditions such as:
+出现以下情况时，工具会直接停止，而不是冒险继续：
 
-- invalid profile ID
-- missing `--file` path
-- invalid backup selection
-- incomplete backup marker present
-- missing manifest, snapshot, or `.reg` export
-- backup hash mismatch
-- wrong registry target in backup metadata
-- unsupported registry value kinds in restore snapshot
-- `Segoe UI*` values of an unexpected type
-- post-write verification mismatch
+- 无效的配置 ID
+- 缺失 `--file` 路径
+- 备份选择无效
+- 存在不完整备份标记
+- 缺少 manifest、快照或 `.reg` 文件
+- 备份文件哈希不匹配
+- 备份目标注册表路径不匹配
+- 恢复快照中包含不支持的值类型
+- 目标值不是 `MultiString`
+- 写入后校验不一致
 
-## Notes
+## 说明
 
-- `status` shows the current `Segoe UI*` values plus `Tahoma` and `Microsoft Sans Serif`, along with the latest valid backup
-- `list` shows supported profiles and their priority fonts
-- the TUI stores the selected language locally in `.segoelinker.user.json`
-- changes may require logoff, reboot, or target application restart before they become visible
-- the `backups/` directory is ignored by Git except for `.gitkeep`
-- `.segoelinker.user.json` is ignored by Git
+- `status` 会显示当前 `Segoe UI*`、`Tahoma`、`Microsoft Sans Serif` 的状态，以及最近一个有效备份
+- `list` 会显示支持的配置和对应优先字体
+- TUI 会把所选界面语言写入 `.segoelinker.user.json`
+- 变更是否立即生效，取决于系统和应用；通常可能需要注销、重启，或重启相关程序
+- `backups/` 除 `.gitkeep` 外已加入 Git 忽略
+- `.segoelinker.user.json` 已加入 Git 忽略
 
-## Limitations
+## 限制
 
-- this tool only reorders existing entries; it does not synthesize missing FontLink data
-- if an `apply` operation fails partway through writing, the pre-write backup is available, but rollback is still a separate deliberate action
-- interactive TUI behavior is intended for a local console session, not unattended automation
-- single-key menu handling depends on a local console; when that is unavailable, PowerShell may fall back to line-based input
+- 本工具只调整已有条目的顺序，不负责合成缺失的 FontLink 数据
+- 如果 `apply` 在写入过程中中途失败，虽然前置备份已经存在，但回滚仍然是单独的显式操作
+- TUI 面向本地交互控制台，不适合无人值守自动化
+- 在不支持即时按键读取的环境下，TUI 会回退到按行输入兼容模式
 
-## Disclaimer
+## 免责声明
 
-This project aims to be careful, but it still changes sensitive registry settings. Review the code, understand the recovery path, and do not apply changes blindly.
+本项目尽量保守，但它仍然会修改敏感的系统注册表配置。请先理解代码和恢复路径，不要在不了解后果的情况下直接应用。
